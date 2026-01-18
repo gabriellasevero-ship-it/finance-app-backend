@@ -31,20 +31,30 @@ exports.listDebts = async (_, res) => \{\
   res.json(result.rows);\
 \};\
 }
-    exports.connectBank = (req, res) => {
-  const { institution } = req.body;
+    exports.connectBank = async (req, res) => {
+  try {
+    const { institution } = req.body;
 
-  if (!institution) {
-    return res.status(400).json({ error: "Instituição não informada" });
+    if (!institution) {
+      return res.status(400).json({ error: 'Instituição não informada' });
+    }
+
+    // 🔮 Aqui no futuro entra Belvo SDK
+    // const link = await belvo.links.create(...)
+
+    return res.status(200).json({
+      message: 'Banco conectado com sucesso',
+      institution,
+      accounts: [
+        {
+          id: 'acc_1',
+          name: 'Conta Corrente',
+          balance: 3500
+        }
+      ]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erro ao conectar banco' });
   }
-
-  const newAccount = {
-    id: Date.now(),
-    institution_id: institution.id,
-    institution_name: institution.name,
-    balance: Math.floor(Math.random() * 5000),
-    updated_at: new Date().toISOString()
-  };
-
-  return res.status(201).json(newAccount);
 };
