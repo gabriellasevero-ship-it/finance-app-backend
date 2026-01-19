@@ -1,5 +1,6 @@
 
-const BASE_URL = "https://finance-app-backend.onrender.com";
+// URL do backend - pode ser configurada via variável de ambiente ou usa a padrão
+const BASE_URL = import.meta.env.VITE_API_URL || "https://finance-app-backend-1.onrender.com";
 
 export const api = {
   checkBackendHealth: async () => {

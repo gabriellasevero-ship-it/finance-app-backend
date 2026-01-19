@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: finance-app-backend-1
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: BELVO_SECRET_ID
+        sync: false
+      - key: BELVO_SECRET_PASSWORD
+        sync: false

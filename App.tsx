@@ -10,7 +10,7 @@ import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
 import { User, Debt, Account, Institution } from './types';
 import { INITIAL_DEBTS } from './constants';
-import { saveToStorage, getFromStorage, STORAGE_KEYS } from './services/storage';
+import { saveUser, getUser, saveDebts, getDebts, saveAccounts, getAccounts } from './services/storage';
 import { api } from './services/api';
 
 const App: React.FC = () => {
@@ -29,15 +29,19 @@ const App: React.FC = () => {
       const health = await api.checkBackendHealth();
       setIsBackendOnline(health.success);
 
-      // 2. Carregar dados locais
-      const storedUser = getFromStorage<User>(STORAGE_KEYS.USER);
-      const storedDebts = getFromStorage<Debt[]>(STORAGE_KEYS.DEBTS);
-      const storedAccounts = getFromStorage<Account[]>(STORAGE_KEYS.ACCOUNTS);
+      // 2. Carregar dados (tenta Supabase primeiro, depois localStorage)
+      const storedUser = await getUser();
+      const userId = storedUser?.id || '';
 
       if (storedUser) {
         setUser(storedUser);
-        setDebts(storedDebts || INITIAL_DEBTS);
-        setAccounts(storedAccounts || []);
+        
+        // Carregar dívidas e contas (do Supabase ou localStorage)
+        const storedDebts = await getDebts(userId);
+        const storedAccounts = await getAccounts(userId);
+        
+        setDebts(storedDebts.length > 0 ? storedDebts : INITIAL_DEBTS);
+        setAccounts(storedAccounts);
         setIsFirstAccess(false);
       }
       
@@ -47,20 +51,28 @@ const App: React.FC = () => {
     initializeApp();
   }, []);
 
-  // Persist changes to local storage (Fallback)
+  // Persist changes (tenta Supabase, depois localStorage como fallback)
   useEffect(() => {
-    if (user) saveToStorage(STORAGE_KEYS.USER, user);
+    if (user) {
+      saveUser(user);
+    }
   }, [user]);
 
   useEffect(() => {
-    if (debts.length > 0) saveToStorage(STORAGE_KEYS.DEBTS, debts);
-  }, [debts]);
+    if (debts.length > 0 && user) {
+      saveDebts(user.id, debts);
+    }
+  }, [debts, user]);
 
   useEffect(() => {
-    if (accounts.length > 0) saveToStorage(STORAGE_KEYS.ACCOUNTS, accounts);
-  }, [accounts]);
+    if (accounts.length > 0 && user) {
+      saveAccounts(user.id, accounts);
+    }
+  }, [accounts, user]);
 
-  const handleCompleteOnboarding = (userData: User, selectedBanks: Institution[]) => {
+  const handleCompleteOnboarding = async (userData: User, selectedBanks: Institution[]) => {
+    // Salvar usuário no Supabase/localStorage
+    await saveUser(userData);
     setUser(userData);
     
     // Para o onboarding, também poderíamos disparar as conexões via backend, 
@@ -68,11 +80,15 @@ const App: React.FC = () => {
     const initialAccounts: Account[] = selectedBanks.map(inst => ({
       id: Math.random().toString(36).substr(2, 9),
       institution_id: inst.id,
-      tipo: 'corrente',
+      tipo: 'corrente' as const,
       saldo_atual: Math.floor(Math.random() * 3000) + 500,
       updated_at: new Date().toISOString(),
     }));
 
+    // Salvar contas e dívidas
+    await saveAccounts(userData.id, initialAccounts);
+    await saveDebts(userData.id, INITIAL_DEBTS);
+    
     setAccounts(initialAccounts);
     setDebts(INITIAL_DEBTS);
     setIsFirstAccess(false);

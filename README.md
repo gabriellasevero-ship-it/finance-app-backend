@@ -20,6 +20,7 @@ Este repositório contém:
 - API REST para conexão com instituições financeiras
 - Integração com Belvo (Open Finance)
 - Gerenciamento de dívidas e contas
+- Banco de dados Supabase (PostgreSQL)
 
 ## Run Locally - Frontend
 
@@ -30,10 +31,14 @@ Este repositório contém:
    npm install
    ```
 
-2. Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key:
+2. Configure as variáveis de ambiente no `.env.local`:
    ```bash
    GEMINI_API_KEY=your_api_key_here
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
    ```
+   
+   📖 Veja [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) para instruções detalhadas de configuração do Supabase.
 
 3. Run the app:
    ```bash
@@ -50,9 +55,13 @@ Este repositório contém:
 2. Configure environment variables in `.env`:
    ```
    PORT=3000
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
    BELVO_SECRET_ID=your_belvo_secret_id
    BELVO_SECRET_PASSWORD=your_belvo_password
    ```
+   
+   📖 Veja [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) para instruções detalhadas de configuração do Supabase.
 
 3. Run the server:
    ```bash

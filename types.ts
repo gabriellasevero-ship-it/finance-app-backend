@@ -21,14 +21,17 @@ export interface Institution {
 
 export interface Account {
   id: string;
+  user_id?: string; // Opcional para compatibilidade
   institution_id: string;
   tipo: 'corrente' | 'poupanca';
   saldo_atual: number;
+  created_at?: string;
   updated_at: string;
 }
 
 export interface Debt {
   id: string;
+  user_id?: string; // Opcional para compatibilidade
   nome: string;
   tipo: DebtType;
   parcela_mensal: number;
@@ -37,6 +40,8 @@ export interface Debt {
   impacto_psicologico: number; // 1-5
   prioridade_manual: number; // 1-5
   ativo: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface SimulationResult {
