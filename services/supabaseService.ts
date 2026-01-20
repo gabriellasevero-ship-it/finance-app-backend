@@ -1,9 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { User, Debt, Account, Institution } from '../types';
+import { User, Debt, Account } from '../types';
 
 // As variáveis de ambiente serão carregadas pelo Vite
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+// Debug: logar status das variáveis (sem expor valores sensíveis)
+console.log('Supabase Config:', {
+  urlDefined: !!supabaseUrl,
+  urlLength: supabaseUrl.length,
+  keyDefined: !!supabaseAnonKey,
+  keyLength: supabaseAnonKey.length
+});
 
 // Verifica se Supabase está configurado
 export const isSupabaseConfigured = (): boolean => {
@@ -15,8 +23,9 @@ let supabase: SupabaseClient | null = null;
 
 if (isSupabaseConfigured()) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
+  console.log('✅ Supabase client criado com sucesso');
 } else {
-  console.info('ℹ️ Supabase não configurado. Usando localStorage como fallback.');
+  console.warn('⚠️ Supabase não configurado. VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY são necessários.');
 }
 
 export { supabase };
