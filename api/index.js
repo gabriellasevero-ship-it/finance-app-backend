@@ -1,10 +1,9 @@
-import Belvo from 'belvo';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client
 const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
+  process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
 );
 
 // Belvo config
@@ -15,12 +14,17 @@ const BELVO_BASE_URL = BELVO_ENV === 'production'
   ? 'https://api.belvo.com' 
   : 'https://sandbox.belvo.com';
 
-// Helper para criar cliente Belvo
+// Helper para criar cliente Belvo (lazy load)
+let BelvoClass = null;
 async function getBelvoClient() {
   if (!BELVO_SECRET_ID || !BELVO_SECRET_PASSWORD) {
     throw new Error('Belvo não configurado');
   }
-  const client = new Belvo(BELVO_SECRET_ID, BELVO_SECRET_PASSWORD, BELVO_BASE_URL);
+  if (!BelvoClass) {
+    const belvoModule = await import('belvo');
+    BelvoClass = belvoModule.default;
+  }
+  const client = new BelvoClass(BELVO_SECRET_ID, BELVO_SECRET_PASSWORD, BELVO_BASE_URL);
   await client.connect();
   return client;
 }
