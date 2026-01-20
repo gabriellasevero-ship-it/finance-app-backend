@@ -6,50 +6,82 @@ import Simulator from './components/Simulator';
 import Plan from './components/Plan';
 import Progress from './components/Progress';
 import Settings from './components/Settings';
-import Onboarding from './components/Onboarding';
+import Auth from './components/Auth';
 import { User, Debt, Account, Institution } from './types';
-import { saveUser, getUser, saveDebts, getDebts, saveAccounts, getAccounts } from './services/storage';
+import { saveUser, saveDebts, getDebts, saveAccounts, getAccounts } from './services/storage';
+import { authService } from './services/authService';
 import { api } from './services/api';
 
 const App: React.FC = () => {
-  const [isFirstAccess, setIsFirstAccess] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [debts, setDebts] = useState<Debt[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot-password' | 'reset-password'>('login');
 
-  // Initial Data Load & Backend Health Check
+  // Verificar se é redirecionamento de reset de senha
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery')) {
+      setAuthMode('reset-password');
+    }
+  }, []);
+
+  // Initial Data Load & Auth Check
   useEffect(() => {
     const initializeApp = async () => {
       // 1. Verificar Backend
       const health = await api.checkBackendHealth();
       setIsBackendOnline(health.success);
 
-      // 2. Carregar dados (tenta Supabase primeiro, depois localStorage)
-      const storedUser = await getUser();
-      const userId = storedUser?.id || '';
-
-      if (storedUser) {
-        setUser(storedUser);
+      // 2. Verificar sessão de autenticação
+      const session = await authService.getSession();
+      
+      if (session.isAuthenticated && session.user) {
+        setUser(session.user);
+        setIsAuthenticated(true);
         
-        // Carregar dívidas e contas (do Supabase ou localStorage)
-        const storedDebts = await getDebts(userId);
-        const storedAccounts = await getAccounts(userId);
+        // Carregar dívidas e contas do usuário autenticado
+        const storedDebts = await getDebts(session.user.id);
+        const storedAccounts = await getAccounts(session.user.id);
         
         setDebts(storedDebts);
         setAccounts(storedAccounts);
-        setIsFirstAccess(false);
       }
       
       setIsLoading(false);
     };
 
     initializeApp();
+
+    // Escutar mudanças de autenticação
+    const { data: { subscription } } = authService.onAuthStateChange(async (authUser) => {
+      if (authUser) {
+        setUser(authUser);
+        setIsAuthenticated(true);
+        
+        // Carregar dados do usuário
+        const storedDebts = await getDebts(authUser.id);
+        const storedAccounts = await getAccounts(authUser.id);
+        setDebts(storedDebts);
+        setAccounts(storedAccounts);
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+        setDebts([]);
+        setAccounts([]);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Persist changes (tenta Supabase, depois localStorage como fallback)
+  // Persist changes
   useEffect(() => {
     if (user) {
       saveUser(user);
@@ -57,26 +89,44 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    if (debts.length > 0 && user) {
+    if (user) {
       saveDebts(user.id, debts);
     }
   }, [debts, user]);
 
   useEffect(() => {
-    if (accounts.length > 0 && user) {
+    if (user) {
       saveAccounts(user.id, accounts);
     }
   }, [accounts, user]);
 
-  const handleCompleteOnboarding = async (userData: User) => {
-    // Salvar usuário no Supabase/localStorage
-    await saveUser(userData);
-    setUser(userData);
+  // Handler de sucesso na autenticação
+  const handleAuthSuccess = async (authUser: User) => {
+    setUser(authUser);
+    setIsAuthenticated(true);
     
-    // Usuário começa sem dívidas e contas - deve conectar via Open Finance em Settings
-    setAccounts([]);
-    setDebts([]);
-    setIsFirstAccess(false);
+    // Carregar dados do usuário
+    const storedDebts = await getDebts(authUser.id);
+    const storedAccounts = await getAccounts(authUser.id);
+    setDebts(storedDebts);
+    setAccounts(storedAccounts);
+
+    // Limpar hash da URL se houver
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
+  // Handler de logout
+  const handleLogout = async () => {
+    const result = await authService.signOut();
+    if (result.success) {
+      setUser(null);
+      setIsAuthenticated(false);
+      setDebts([]);
+      setAccounts([]);
+      setActiveTab('dashboard');
+    }
   };
 
   const handleUpdateDebt = (updatedDebt: Debt) => {
@@ -122,21 +172,29 @@ const App: React.FC = () => {
     setUser(updatedUser);
   };
 
-  if (isLoading && !isFirstAccess) {
+  // Tela de carregamento inicial
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center">
         <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-600 font-medium animate-pulse">Sincronizando via API...</p>
+        <p className="text-slate-400 font-medium animate-pulse">Carregando...</p>
       </div>
     );
   }
 
-  if (isFirstAccess) {
-    return <Onboarding onComplete={handleCompleteOnboarding} />;
+  // Tela de autenticação (login/cadastro/recuperar senha)
+  if (!isAuthenticated) {
+    return <Auth onAuthSuccess={handleAuthSuccess} initialMode={authMode} />;
   }
 
+  // App principal (usuário autenticado)
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} userName={user?.nome || 'Usuário'}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      userName={user?.nome || 'Usuário'}
+      onLogout={handleLogout}
+    >
       {activeTab === 'dashboard' && (
         <Dashboard user={user!} debts={debts} accounts={accounts} isBackendOnline={isBackendOnline} />
       )}

@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface LayoutProps {
@@ -6,9 +5,10 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userName: string;
+  onLogout?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, userName }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, userName, onLogout }) => {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-chart-pie' },
     { id: 'debts', label: 'Dívidas', icon: 'fa-hand-holding-dollar' },
@@ -44,16 +44,26 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
           ))}
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-slate-800">
+        <div className="mt-auto pt-6 border-t border-slate-800 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
-              <span className="font-bold text-emerald-400">{userName[0]}</span>
+              <span className="font-bold text-emerald-400">{userName[0]?.toUpperCase()}</span>
             </div>
-            <div className="overflow-hidden">
+            <div className="overflow-hidden flex-1">
               <p className="text-sm font-semibold truncate">{userName}</p>
               <p className="text-xs text-slate-500">Plano Premium</p>
             </div>
           </div>
+          
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm"
+            >
+              <i className="fa-solid fa-right-from-bracket"></i>
+              <span>Sair</span>
+            </button>
+          )}
         </div>
       </aside>
 
