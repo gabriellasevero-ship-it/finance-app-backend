@@ -138,8 +138,8 @@ const BelvoWidget: React.FC<BelvoWidgetProps> = ({
 
     // Cleanup
     return () => {
-      // Remove o container do widget se existir
-      const widgetContainer = document.getElementById('belvo-widget');
+      // Remove o conteúdo do container do widget se existir
+      const widgetContainer = document.getElementById('belvo');
       if (widgetContainer) {
         widgetContainer.innerHTML = '';
       }
@@ -178,10 +178,10 @@ const BelvoWidget: React.FC<BelvoWidgetProps> = ({
     );
   }
 
-  // O widget será renderizado pelo SDK no container
+  // O widget será renderizado pelo SDK no container com id="belvo"
   return (
     <div className="fixed inset-0 z-50">
-      <div id="belvo-widget" className="w-full h-full"></div>
+      <div id="belvo" className="w-full h-full"></div>
     </div>
   );
 };
