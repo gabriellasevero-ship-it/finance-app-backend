@@ -5,19 +5,19 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
-// Lazy load dependencies
-let supabase = null;
+// Lazy load dependencies (usando cache para evitar re-importação)
+let supabaseClient = null;
 let BelvoClass = null;
 
-function getSupabase() {
-  if (!supabase) {
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(
+async function getSupabase() {
+  if (!supabaseClient) {
+    const { createClient } = await import('@supabase/supabase-js');
+    supabaseClient = createClient(
       process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
       process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
     );
   }
-  return supabase;
+  return supabaseClient;
 }
 
 async function getBelvoClient() {
@@ -31,7 +31,8 @@ async function getBelvoClient() {
   }
   
   if (!BelvoClass) {
-    BelvoClass = require('belvo').default;
+    const belvoModule = await import('belvo');
+    BelvoClass = belvoModule.default;
   }
   
   try {
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
 
     // ============ DEBTS ============
     if (path === '/debts') {
-      const db = getSupabase();
+      const db = await getSupabase();
       if (req.method === 'GET') {
         const user_id = req.query?.user_id;
         let query = db.from('debts').select('*');
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
 
     // DEBTS by ID
     if (path.startsWith('/debts/')) {
-      const db = getSupabase();
+      const db = await getSupabase();
       const id = path.replace('/debts/', '');
       
       if (req.method === 'PUT') {
@@ -234,7 +235,7 @@ export default async function handler(req, res) {
 
     // ============ BELVO REGISTER LINK ============
     if (path === '/belvo/register-link' && req.method === 'POST') {
-      const db = getSupabase();
+      const db = await getSupabase();
       const { link_id, user_id, institution } = req.body || {};
       if (!link_id || !user_id) return res.status(400).json({ error: 'link_id e user_id são obrigatórios' });
 
@@ -266,7 +267,7 @@ export default async function handler(req, res) {
 
     // ============ BELVO LINKS ============
     if (path === '/belvo/links' && req.method === 'GET') {
-      const db = getSupabase();
+      const db = await getSupabase();
       const user_id = req.query?.user_id;
       if (!user_id) return res.status(400).json({ error: 'user_id é obrigatório' });
       
@@ -277,7 +278,7 @@ export default async function handler(req, res) {
 
     // BELVO LINKS by ID (delete)
     if (path.startsWith('/belvo/links/') && req.method === 'DELETE') {
-      const db = getSupabase();
+      const db = await getSupabase();
       const linkId = path.replace('/belvo/links/', '');
       const { user_id } = req.body || {};
 
@@ -323,7 +324,7 @@ export default async function handler(req, res) {
 
     // ============ BELVO SYNC ============
     if (path.startsWith('/belvo/sync/') && req.method === 'POST') {
-      const db = getSupabase();
+      const db = await getSupabase();
       const linkId = path.replace('/belvo/sync/', '');
       const { user_id } = req.body || {};
       if (!linkId || !user_id) return res.status(400).json({ error: 'linkId e user_id são obrigatórios' });
