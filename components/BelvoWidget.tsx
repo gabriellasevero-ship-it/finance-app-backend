@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 
 // Declaração global para o script do Belvo
@@ -38,9 +38,12 @@ const BelvoWidget: React.FC<BelvoWidgetProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isContainerReady, setIsContainerReady] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetInitialized = useRef(false);
 
   // Carrega o script do Belvo
-  const loadBelvoScript = useCallback((): Promise<void> => {
+  const loadBelvoScript = (): Promise<void> => {
     return new Promise((resolve, reject) => {
       // Verifica se já está carregado
       if (window.belvoSDK) {
@@ -49,139 +52,161 @@ const BelvoWidget: React.FC<BelvoWidgetProps> = ({
       }
 
       const script = document.createElement('script');
-      // Sandbox para desenvolvimento, production para produção
       script.src = 'https://cdn.belvo.io/belvo-widget-1-stable.js';
       script.async = true;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error('Falha ao carregar Belvo SDK'));
       document.body.appendChild(script);
     });
+  };
+
+  // Marca o container como pronto após a renderização
+  useEffect(() => {
+    if (containerRef.current) {
+      setIsContainerReady(true);
+    }
   }, []);
 
-  // Inicializa o widget
-  const initWidget = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // 1. Carrega o script
-      await loadBelvoScript();
-
-      // 2. Obtém o token de acesso
-      const tokenResponse = await api.belvo.getWidgetToken();
-      
-      if (!tokenResponse.success || !tokenResponse.data) {
-        const errorDetails = (tokenResponse as { details?: string }).details;
-        const hint = (tokenResponse as { hint?: string }).hint;
-        let errorMsg = tokenResponse.message || 'Erro ao obter token';
-        if (errorDetails) errorMsg += ` - ${errorDetails}`;
-        if (hint) errorMsg += `. ${hint}`;
-        throw new Error(errorMsg);
-      }
-
-      const { access: accessToken } = tokenResponse.data;
-
-      // 3. Cria e exibe o widget
-      if (!window.belvoSDK) {
-        throw new Error('Belvo SDK não carregado');
-      }
-
-      const widget = window.belvoSDK.createWidget(accessToken, {
-        institution: institution,
-        locale: 'pt',
-        country_codes: ['BR'],
-        
-        // Callback de sucesso - usuário conectou o banco
-        callback: async (linkId: string, institutionName: string) => {
-          try {
-            // Registra o link no backend
-            const result = await api.belvo.registerLink(linkId, userId, institutionName);
-            
-            if (result.success && result.data) {
-              onSuccess(linkId, institutionName, result.data.accounts || []);
-            } else {
-              onError(result.message || 'Erro ao registrar conexão');
-            }
-          } catch (err) {
-            onError('Erro ao processar conexão bancária');
-          }
-        },
-
-        // Callback de saída - usuário fechou o widget
-        onExit: (data) => {
-          if (data.last_encountered_error) {
-            onError(data.last_encountered_error.message);
-          } else {
-            onClose();
-          }
-        },
-
-        // Callback de eventos (para logging/analytics)
-        onEvent: (data) => {
-          console.log('Belvo Widget Event:', data.eventName, data.meta_data);
-        }
-      });
-
-      widget.build();
-      setIsLoading(false);
-
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-      setError(errorMessage);
-      setIsLoading(false);
-      onError(errorMessage);
-    }
-  }, [loadBelvoScript, institution, userId, onSuccess, onError, onClose]);
-
+  // Inicializa o widget somente quando o container estiver pronto
   useEffect(() => {
-    initWidget();
+    if (!isContainerReady || widgetInitialized.current) return;
 
-    // Cleanup
+    const initWidget = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        widgetInitialized.current = true;
+
+        // 1. Carrega o script
+        await loadBelvoScript();
+
+        // 2. Obtém o token de acesso
+        const tokenResponse = await api.belvo.getWidgetToken();
+        
+        if (!tokenResponse.success || !tokenResponse.data) {
+          const errorDetails = (tokenResponse as { details?: string }).details;
+          const hint = (tokenResponse as { hint?: string }).hint;
+          let errorMsg = tokenResponse.message || 'Erro ao obter token';
+          if (errorDetails) errorMsg += ` - ${errorDetails}`;
+          if (hint) errorMsg += `. ${hint}`;
+          throw new Error(errorMsg);
+        }
+
+        const { access: accessToken } = tokenResponse.data;
+
+        // 3. Verifica se o SDK está disponível
+        if (!window.belvoSDK) {
+          throw new Error('Belvo SDK não carregado');
+        }
+
+        // 4. Verifica se o container existe no DOM
+        const belvoContainer = document.getElementById('belvo');
+        if (!belvoContainer) {
+          throw new Error('Container do widget não encontrado');
+        }
+
+        // 5. Cria e exibe o widget
+        const widget = window.belvoSDK.createWidget(accessToken, {
+          institution: institution,
+          locale: 'pt',
+          country_codes: ['BR'],
+          
+          // Callback de sucesso - usuário conectou o banco
+          callback: async (linkId: string, institutionName: string) => {
+            try {
+              // Registra o link no backend
+              const result = await api.belvo.registerLink(linkId, userId, institutionName);
+              
+              if (result.success && result.data) {
+                onSuccess(linkId, institutionName, result.data.accounts || []);
+              } else {
+                onError(result.message || 'Erro ao registrar conexão');
+              }
+            } catch (err) {
+              onError('Erro ao processar conexão bancária');
+            }
+          },
+
+          // Callback de saída - usuário fechou o widget
+          onExit: (data) => {
+            if (data.last_encountered_error) {
+              onError(data.last_encountered_error.message);
+            } else {
+              onClose();
+            }
+          },
+
+          // Callback de eventos (para logging/analytics)
+          onEvent: (data) => {
+            console.log('Belvo Widget Event:', data.eventName, data.meta_data);
+          }
+        });
+
+        widget.build();
+        setIsLoading(false);
+
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+        setError(errorMessage);
+        setIsLoading(false);
+        onError(errorMessage);
+      }
+    };
+
+    initWidget();
+  }, [isContainerReady, institution, userId, onSuccess, onError, onClose]);
+
+  // Cleanup
+  useEffect(() => {
     return () => {
-      // Remove o conteúdo do container do widget se existir
       const widgetContainer = document.getElementById('belvo');
       if (widgetContainer) {
         widgetContainer.innerHTML = '';
       }
+      widgetInitialized.current = false;
     };
-  }, [initWidget]);
+  }, []);
 
-  if (error) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
-          <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i className="fa-solid fa-triangle-exclamation text-rose-500 text-2xl"></i>
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Erro na Conexão</h3>
-          <p className="text-slate-600 mb-6">{error}</p>
-          <button
-            onClick={onClose}
-            className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
-          >
-            Fechar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Carregando...</h3>
-          <p className="text-slate-600">Preparando conexão segura com seu banco</p>
-        </div>
-      </div>
-    );
-  }
-
-  // O widget será renderizado pelo SDK no container com id="belvo"
+  // Sempre renderiza o container, mas mostra overlay de loading/erro por cima
   return (
-    <div className="fixed inset-0 z-50">
-      <div id="belvo" className="w-full h-full"></div>
+    <div className="fixed inset-0 z-50 bg-black/50">
+      {/* Container obrigatório do Belvo - deve estar sempre no DOM */}
+      <div 
+        id="belvo" 
+        ref={containerRef}
+        className="w-full h-full"
+        style={{ display: isLoading || error ? 'none' : 'block' }}
+      ></div>
+
+      {/* Overlay de erro */}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
+            <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i className="fa-solid fa-triangle-exclamation text-rose-500 text-2xl"></i>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Erro na Conexão</h3>
+            <p className="text-slate-600 mb-6">{error}</p>
+            <button
+              onClick={onClose}
+              className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Overlay de carregamento */}
+      {isLoading && !error && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
+            <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Carregando...</h3>
+            <p className="text-slate-600">Preparando conexão segura com seu banco</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
