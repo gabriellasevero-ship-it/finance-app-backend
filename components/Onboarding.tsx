@@ -1,10 +1,8 @@
-
 import React, { useState } from 'react';
-import { User, Institution } from '../types';
-import { INSTITUTIONS } from '../constants';
+import { User } from '../types';
 
 interface OnboardingProps {
-  onComplete: (user: User, selectedBanks: Institution[]) => void;
+  onComplete: (user: User) => void;
 }
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
@@ -14,25 +12,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     email: '',
     salario_liquido: 0
   });
-  const [selectedBankIds, setSelectedBankIds] = useState<string[]>([]);
 
   const nextStep = () => setStep(prev => prev + 1);
 
-  const toggleBank = (id: string) => {
-    setSelectedBankIds(prev => 
-      prev.includes(id) ? prev.filter(bid => bid !== id) : [...prev, id]
-    );
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const selectedBanks = INSTITUTIONS.filter(inst => selectedBankIds.includes(inst.id));
+    // Gera um ID único para o usuário
+    const uniqueId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     onComplete({
-      id: '1',
+      id: uniqueId,
       nome: formData.nome,
       email: formData.email,
       salario_liquido: formData.salario_liquido
-    }, selectedBanks);
+    });
   };
 
   return (
@@ -57,7 +49,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         )}
 
         {step === 2 && (
-          <form onSubmit={(e) => { e.preventDefault(); nextStep(); }} className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 animate-slideUp">
+          <form onSubmit={handleSubmit} className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 animate-slideUp">
             <h2 className="text-2xl font-bold mb-2">Configure seu Perfil</h2>
             <p className="text-slate-400 mb-8">Precisamos de alguns dados estratégicos.</p>
             
@@ -92,57 +84,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
               <button
                 type="submit"
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-emerald-500/10"
+                disabled={!formData.nome || !formData.salario_liquido}
+                className={`w-full font-bold py-4 rounded-xl transition-all shadow-lg ${
+                  formData.nome && formData.salario_liquido
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/10'
+                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                }`}
               >
-                Próximo passo
+                Começar a usar
               </button>
+              
+              <p className="text-xs text-slate-500 text-center">
+                Você poderá conectar seus bancos via Open Finance nas configurações.
+              </p>
             </div>
           </form>
-        )}
-
-        {step === 3 && (
-          <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 animate-slideUp">
-            <h2 className="text-2xl font-bold mb-2">Conectar Contas</h2>
-            <p className="text-slate-400 mb-8">Selecione seus bancos para importar dados via Open Finance.</p>
-            
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              {INSTITUTIONS.map(inst => (
-                <button
-                  key={inst.id}
-                  onClick={() => toggleBank(inst.id)}
-                  className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${
-                    selectedBankIds.includes(inst.id) 
-                    ? 'border-emerald-500 bg-emerald-500/10' 
-                    : 'border-slate-700 bg-slate-900 hover:border-slate-500'
-                  }`}
-                >
-                  <img src={inst.logo} alt={inst.nome} className="w-12 h-12 rounded-xl object-contain mb-3 bg-white p-1" />
-                  <span className="text-xs font-bold">{inst.nome}</span>
-                  {selectedBankIds.includes(inst.id) && (
-                    <div className="mt-2 text-[10px] text-emerald-400 font-bold uppercase">Selecionado</div>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              disabled={selectedBankIds.length === 0}
-              className={`w-full font-bold py-4 rounded-xl transition-all shadow-lg ${
-                selectedBankIds.length > 0 
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/10' 
-                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              Conectar e Finalizar
-            </button>
-            <button 
-              onClick={() => setStep(2)}
-              className="w-full mt-4 text-slate-500 hover:text-slate-300 text-sm font-medium"
-            >
-              Voltar
-            </button>
-          </div>
         )}
       </div>
     </div>

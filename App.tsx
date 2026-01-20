@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -9,7 +8,6 @@ import Progress from './components/Progress';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
 import { User, Debt, Account, Institution } from './types';
-import { INITIAL_DEBTS } from './constants';
 import { saveUser, getUser, saveDebts, getDebts, saveAccounts, getAccounts } from './services/storage';
 import { api } from './services/api';
 
@@ -40,7 +38,7 @@ const App: React.FC = () => {
         const storedDebts = await getDebts(userId);
         const storedAccounts = await getAccounts(userId);
         
-        setDebts(storedDebts.length > 0 ? storedDebts : INITIAL_DEBTS);
+        setDebts(storedDebts);
         setAccounts(storedAccounts);
         setIsFirstAccess(false);
       }
@@ -70,27 +68,14 @@ const App: React.FC = () => {
     }
   }, [accounts, user]);
 
-  const handleCompleteOnboarding = async (userData: User, selectedBanks: Institution[]) => {
+  const handleCompleteOnboarding = async (userData: User) => {
     // Salvar usuário no Supabase/localStorage
     await saveUser(userData);
     setUser(userData);
     
-    // Para o onboarding, também poderíamos disparar as conexões via backend, 
-    // mas aqui mantemos o mock inicial para rapidez da UI e usamos a API no Settings.
-    const initialAccounts: Account[] = selectedBanks.map(inst => ({
-      id: Math.random().toString(36).substr(2, 9),
-      institution_id: inst.id,
-      tipo: 'corrente' as const,
-      saldo_atual: Math.floor(Math.random() * 3000) + 500,
-      updated_at: new Date().toISOString(),
-    }));
-
-    // Salvar contas e dívidas
-    await saveAccounts(userData.id, initialAccounts);
-    await saveDebts(userData.id, INITIAL_DEBTS);
-    
-    setAccounts(initialAccounts);
-    setDebts(INITIAL_DEBTS);
+    // Usuário começa sem dívidas e contas - deve conectar via Open Finance em Settings
+    setAccounts([]);
+    setDebts([]);
     setIsFirstAccess(false);
   };
 
@@ -107,30 +92,24 @@ const App: React.FC = () => {
     setDebts(prev => prev.filter(d => d.id !== id));
   };
 
-  // FUNÇÃO ATUALIZADA COM CHAMADA REAL AO BACKEND
+  // Função de conexão de banco (modo demonstração - sem dados reais)
+  // Para conexão real, usar Open Finance via Settings
   const handleConnectBank = async (inst: Institution) => {
-    setIsLoading(true);
+    // Modo demonstração: apenas adiciona a instituição como conectada
+    // sem dados de saldo (será preenchido quando sincronizar via Open Finance)
+    const demoAccount: Account = {
+      id: `demo_${inst.id}_${Date.now()}`,
+      institution_id: inst.id,
+      tipo: 'corrente',
+      saldo_atual: 0, // Sem saldo mockado
+      updated_at: new Date().toISOString(),
+    };
     
-    const result = await api.connectBank(inst.id);
+    setAccounts(prev => [...prev, demoAccount]);
     
-    if (result.success) {
-      // Se o backend retornou dados específicos da conta, usamos eles.
-      // Caso contrário (se for apenas um OK), geramos dados locais para a UI.
-      const newAccount: Account = result.data?.account || {
-        id: Math.random().toString(36).substr(2, 9),
-        institution_id: inst.id,
-        tipo: 'corrente',
-        saldo_atual: Math.floor(Math.random() * 5000) + 100,
-        updated_at: new Date().toISOString(),
-      };
-      
-      setAccounts(prev => [...prev, newAccount]);
-      alert(result.message);
-    } else {
-      alert("Erro ao conectar banco no backend: " + result.message);
+    if (user) {
+      await saveAccounts(user.id, [...accounts, demoAccount]);
     }
-    
-    setIsLoading(false);
   };
 
   const handleDisconnectBank = (instId: string) => {
