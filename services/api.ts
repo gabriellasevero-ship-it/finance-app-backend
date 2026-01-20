@@ -122,7 +122,7 @@ export const api = {
     /**
      * Obtém token para o Belvo Connect Widget
      */
-    getWidgetToken: async (linkId?: string): Promise<ApiResponse<BelvoWidgetToken>> => {
+    getWidgetToken: async (linkId?: string): Promise<ApiResponse<BelvoWidgetToken> & { details?: string; hint?: string }> => {
       try {
         const response = await fetch(`${BASE_URL}/api/belvo/widget-token`, {
           method: 'POST',
@@ -132,12 +132,17 @@ export const api = {
           body: JSON.stringify(linkId ? { link_id: linkId } : {})
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Erro ao obter token");
+          return {
+            success: false,
+            message: data.message || data.error || "Erro ao obter token",
+            details: data.details,
+            hint: data.hint
+          };
         }
 
-        const data = await response.json();
         return {
           success: true,
           message: "Token obtido com sucesso",

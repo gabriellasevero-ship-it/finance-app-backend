@@ -27,14 +27,22 @@ async function getBelvoClient() {
   const BELVO_BASE_URL = BELVO_ENV === 'production' ? 'https://api.belvo.com' : 'https://sandbox.belvo.com';
   
   if (!BELVO_SECRET_ID || !BELVO_SECRET_PASSWORD) {
-    throw new Error('Belvo não configurado');
+    throw new Error('Belvo não configurado. BELVO_SECRET_ID ou BELVO_SECRET_PASSWORD não definidos.');
   }
+  
   if (!BelvoClass) {
     BelvoClass = require('belvo').default;
   }
-  const client = new BelvoClass(BELVO_SECRET_ID, BELVO_SECRET_PASSWORD, BELVO_BASE_URL);
-  await client.connect();
-  return client;
+  
+  try {
+    const client = new BelvoClass(BELVO_SECRET_ID, BELVO_SECRET_PASSWORD, BELVO_BASE_URL);
+    await client.connect();
+    return client;
+  } catch (connectError) {
+    console.error('Erro ao conectar com Belvo:', connectError);
+    const errorMessage = connectError.response?.data?.detail || connectError.message || 'Falha na autenticação';
+    throw new Error(`Falha ao autenticar com Belvo (${BELVO_ENV}): ${errorMessage}`);
+  }
 }
 
 function mapAccountType(belvoType) {
@@ -49,8 +57,12 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const path = (req.url || '').replace('/api', '').split('?')[0] || '';
+  const rawPath = req.url || '';
+  const path = rawPath.replace('/api', '').split('?')[0] || '';
   const BELVO_ENV = process.env.BELVO_ENV || 'sandbox';
+
+  // Debug: log do path para diagnóstico
+  console.log('Request path:', { rawPath, parsedPath: path, method: req.method });
 
   try {
     // ============ HEALTH ============
@@ -125,19 +137,88 @@ export default async function handler(req, res) {
       });
     }
 
+    // ============ BELVO DEBUG (não expõe credenciais completas) ============
+    if (path === '/belvo/debug') {
+      const secretId = process.env.BELVO_SECRET_ID || '';
+      const secretPassword = process.env.BELVO_SECRET_PASSWORD || '';
+      const belvoEnv = process.env.BELVO_ENV || 'sandbox';
+      
+      // Mascara as credenciais para debug seguro
+      const maskCredential = (str) => {
+        if (!str) return '(não definido)';
+        if (str.length <= 8) return `${str.substring(0, 2)}***`;
+        return `${str.substring(0, 4)}...${str.substring(str.length - 4)} (${str.length} chars)`;
+      };
+
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        environment: belvoEnv,
+        baseUrl: belvoEnv === 'production' ? 'https://api.belvo.com' : 'https://sandbox.belvo.com',
+        credentials: {
+          secretId: {
+            defined: !!secretId,
+            preview: maskCredential(secretId),
+            length: secretId.length
+          },
+          secretPassword: {
+            defined: !!secretPassword,
+            preview: maskCredential(secretPassword),
+            length: secretPassword.length
+          }
+        },
+        envVarsAvailable: {
+          BELVO_SECRET_ID: !!process.env.BELVO_SECRET_ID,
+          BELVO_SECRET_PASSWORD: !!process.env.BELVO_SECRET_PASSWORD,
+          BELVO_ENV: !!process.env.BELVO_ENV,
+          SUPABASE_URL: !!process.env.SUPABASE_URL,
+          SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY
+        }
+      };
+
+      // Tenta conectar para testar as credenciais
+      try {
+        const client = await getBelvoClient();
+        debugInfo.connectionTest = {
+          success: true,
+          message: 'Conexão com Belvo estabelecida com sucesso'
+        };
+      } catch (testError) {
+        debugInfo.connectionTest = {
+          success: false,
+          error: testError.message,
+          hint: 'Verifique se as credenciais estão corretas no painel do Belvo'
+        };
+      }
+
+      return res.json(debugInfo);
+    }
+
     // ============ BELVO WIDGET TOKEN ============
     if (path === '/belvo/widget-token' && req.method === 'POST') {
-      const client = await getBelvoClient();
-      const { link_id } = req.body || {};
-      
-      let tokenResponse;
-      if (link_id) {
-        tokenResponse = await client.widgetToken.create({ link: link_id, scopes: 'read_institutions,write_links,read_links' });
-      } else {
-        tokenResponse = await client.widgetToken.create();
+      try {
+        const client = await getBelvoClient();
+        const { link_id } = req.body || {};
+        
+        let tokenResponse;
+        if (link_id) {
+          tokenResponse = await client.widgetToken.create({ link: link_id, scopes: 'read_institutions,write_links,read_links' });
+        } else {
+          tokenResponse = await client.widgetToken.create();
+        }
+        
+        return res.json({ access: tokenResponse.access, refresh: tokenResponse.refresh, environment: BELVO_ENV });
+      } catch (tokenError) {
+        console.error('Erro ao obter widget token:', tokenError);
+        const errorMessage = tokenError.message || 'Erro desconhecido';
+        const errorDetails = tokenError.response?.data || tokenError.detail || null;
+        
+        return res.status(500).json({ 
+          error: 'Erro ao gerar token do widget',
+          message: errorMessage,
+          details: errorDetails,
+          hint: 'Verifique se as credenciais BELVO_SECRET_ID e BELVO_SECRET_PASSWORD estão corretas e se a conta Belvo está ativa.'
+        });
       }
-      
-      return res.json({ access: tokenResponse.access, refresh: tokenResponse.refresh, environment: BELVO_ENV });
     }
 
     // ============ BELVO INSTITUTIONS ============

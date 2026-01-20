@@ -71,7 +71,12 @@ const BelvoWidget: React.FC<BelvoWidgetProps> = ({
       const tokenResponse = await api.belvo.getWidgetToken();
       
       if (!tokenResponse.success || !tokenResponse.data) {
-        throw new Error(tokenResponse.message || 'Erro ao obter token');
+        const errorDetails = (tokenResponse as { details?: string }).details;
+        const hint = (tokenResponse as { hint?: string }).hint;
+        let errorMsg = tokenResponse.message || 'Erro ao obter token';
+        if (errorDetails) errorMsg += ` - ${errorDetails}`;
+        if (hint) errorMsg += `. ${hint}`;
+        throw new Error(errorMsg);
       }
 
       const { access: accessToken } = tokenResponse.data;
