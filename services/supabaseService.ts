@@ -1,19 +1,30 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { User, Debt, Account, Institution } from '../types';
 
 // As variáveis de ambiente serão carregadas pelo Vite
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase não configurado. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY');
+// Verifica se Supabase está configurado
+export const isSupabaseConfigured = (): boolean => {
+  return !!(supabaseUrl && supabaseAnonKey);
+};
+
+// Só cria o cliente se as credenciais existirem
+let supabase: SupabaseClient | null = null;
+
+if (isSupabaseConfigured()) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.info('ℹ️ Supabase não configurado. Usando localStorage como fallback.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export { supabase };
 
 // ============ USERS ============
 export const userService = {
   async getCurrentUser(): Promise<User | null> {
+    if (!supabase) return null;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
@@ -28,6 +39,8 @@ export const userService = {
   },
 
   async createUser(userData: Partial<User> & { nome: string; salario_liquido: number }): Promise<User | null> {
+    if (!supabase) return null;
+    
     // Gerar ID se não tiver (para guest users)
     const userId = userData.id || localStorage.getItem('guest_user_id') || Math.random().toString(36).substr(2, 9);
     localStorage.setItem('guest_user_id', userId);
@@ -55,6 +68,8 @@ export const userService = {
   },
 
   async updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from('users')
       .update(updates)
@@ -73,6 +88,8 @@ export const userService = {
 // ============ DEBTS ============
 export const debtService = {
   async getDebts(userId: string): Promise<Debt[]> {
+    if (!supabase) return [];
+    
     const { data, error } = await supabase
       .from('debts')
       .select('*')
@@ -88,6 +105,8 @@ export const debtService = {
   },
 
   async createDebt(userId: string, debtData: Omit<Debt, 'id' | 'user_id'>): Promise<Debt | null> {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from('debts')
       .insert([{ user_id: userId, ...debtData }])
@@ -102,6 +121,8 @@ export const debtService = {
   },
 
   async updateDebt(debtId: string, updates: Partial<Debt>): Promise<Debt | null> {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from('debts')
       .update(updates)
@@ -117,6 +138,8 @@ export const debtService = {
   },
 
   async deleteDebt(debtId: string): Promise<boolean> {
+    if (!supabase) return false;
+    
     const { error } = await supabase
       .from('debts')
       .update({ ativo: false })
@@ -133,6 +156,8 @@ export const debtService = {
 // ============ ACCOUNTS ============
 export const accountService = {
   async getAccounts(userId: string): Promise<Account[]> {
+    if (!supabase) return [];
+    
     const { data, error } = await supabase
       .from('accounts')
       .select('*')
@@ -147,6 +172,8 @@ export const accountService = {
   },
 
   async createAccount(userId: string, accountData: Omit<Account, 'id' | 'user_id'>): Promise<Account | null> {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from('accounts')
       .insert([{ user_id: userId, ...accountData }])
@@ -161,6 +188,8 @@ export const accountService = {
   },
 
   async updateAccount(accountId: string, updates: Partial<Account>): Promise<Account | null> {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from('accounts')
       .update(updates)
@@ -176,6 +205,8 @@ export const accountService = {
   },
 
   async deleteAccount(accountId: string): Promise<boolean> {
+    if (!supabase) return false;
+    
     const { error } = await supabase
       .from('accounts')
       .delete()
@@ -189,7 +220,3 @@ export const accountService = {
   },
 };
 
-// Fallback para localStorage quando Supabase não estiver configurado
-export const isSupabaseConfigured = () => {
-  return !!(supabaseUrl && supabaseAnonKey);
-};
