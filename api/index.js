@@ -32,7 +32,8 @@ async function getBelvoClient() {
   
   if (!BelvoClass) {
     const belvoModule = await import('belvo');
-    BelvoClass = belvoModule.default;
+    // O módulo belvo exporta como default, mas pode vir empacotado de formas diferentes
+    BelvoClass = belvoModule.default?.default || belvoModule.default || belvoModule;
   }
   
   try {
